@@ -1,2 +1,4 @@
-ipykernel
 python-dotenv
+ultralytics 
+opencv-python
+opencv-contrib

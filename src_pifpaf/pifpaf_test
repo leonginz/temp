@@ -1,0 +1,71 @@
+import openpifpaf
+import matplotlib.pyplot as plt
+import PIL.Image
+import numpy as np
+
+# Path to your swimmer image
+image_path = 'temp/data/Test_data/000000000785.jpg'
+
+# Load and convert image to numpy array
+image = np.asarray(PIL.Image.open(image_path).convert('RGB'))
+
+# Load predictor
+predictor = openpifpaf.Predictor(checkpoint='resnet50')
+
+# Run prediction
+predictions = predictor.numpy_image(image)
+
+# Print the first prediction
+print(predictions[0])
+
+def visualize_with_annotation_painter(image, predictions):
+    """Visualization method #1: Using AnnotationPainter."""
+    ann_painter = openpifpaf.show.AnnotationPainter()  # Set line_width to make lines less thick
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.imshow(image)
+    ann_painter.annotations(ax, predictions[0])  # Visualize annotations
+    ax.axis('off')
+    plt.tight_layout()
+    plt.show()
+
+def visualize_keypoints_and_skeleton(image, predictions):
+    """Visualization method #2: Manually drawing keypoints and skeleton."""
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.imshow(image)
+
+    # Example for the first detected person
+    ann = predictions[0][0]  # Access the first annotation
+    keypoints = ann.data  # Extract keypoints data from the Annotation object
+
+    # Draw keypoints
+    for x, y, v in keypoints:  # x, y are coordinates, v is confidence
+        if v > 0.1:  # confidence threshold
+            ax.scatter(x, y, s=40, c='red', marker='o')
+
+    # Optionally, draw skeleton lines (using COCO skeleton as example)
+    skeleton = [
+        (15, 13), (13, 11),             # Left leg
+        (16, 14), (14, 12),             # Right leg
+        (11, 12),                       # Hips
+        (5, 11), (6, 12),               # Torso sides
+        (5, 6),                         # Shoulders
+        (5, 7), (7, 9),                 # Left arm
+        (6, 8), (8, 10),                # Right arm
+        (0, 1), (0, 2),                 # Nose to eyes
+        (1, 3), (2, 4),                 # Eyes to ears
+        (0, 5), (0, 6)                  # Nose to shoulders
+    ]
+
+    for i, j in skeleton:
+        if keypoints[i][2] > 0.1 and keypoints[j][2] > 0.1:  # Check confidence
+            ax.plot([keypoints[i][0], keypoints[j][0]],
+                    [keypoints[i][1], keypoints[j][1]],
+                    'g-', linewidth=2)
+
+    ax.axis('off')
+    plt.tight_layout()
+    plt.show()
+
+# Call the desired visualization function
+# visualize_with_annotation_painter(image, predictions)
+visualize_keypoints_and_skeleton(image, predictions)

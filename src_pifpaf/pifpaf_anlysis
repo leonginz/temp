@@ -1,0 +1,74 @@
+import numpy as np
+import PIL.Image
+import matplotlib.pyplot as plt
+import openpifpaf
+import argparse
+import os
+import shutil
+import glob
+
+
+def run_pifpaf_prediction(image):
+    # Setup CLI decoder options manually
+    parser = argparse.ArgumentParser()
+    openpifpaf.decoder.cli(parser)
+    args = parser.parse_args([
+        '--instance-threshold=0.05',       # ↓ more sensitive to weak detections
+        '--seed-threshold=0.05',           # ↓ more candidate seeds kept
+        '--keypoint-threshold=0.05',       # ↓ keeps more partial poses
+        '--force-complete-pose',           # complete even weak skeletons
+        '--dense-connections',             # allows mid-body reasoning
+        '--decoder-workers=0'              # for Windows compatibility
+    ])
+    openpifpaf.decoder.configure(args)
+
+    # Run prediction
+    predictor = openpifpaf.Predictor(checkpoint='shufflenetv2k30')
+    predictions = predictor.numpy_image(np.asarray(image))
+    return predictions[0]  # Single image → first prediction set
+
+
+def annotate_image(image, predictions, output_path, confidence_threshold=0.02):
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.imshow(image)
+
+    for ann in predictions:
+        keypoints = ann.data  # shape (17, 3)
+        for i, (x, y, v) in enumerate(keypoints):
+            if v > confidence_threshold:
+                ax.scatter(x, y, s=30, c='red')
+                ax.text(x + 3, y, f'{i}:{v:.2f}', fontsize=7, color='yellow')
+
+    ax.axis('off')
+    plt.tight_layout()
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    fig.savefig(output_path)
+    plt.close(fig)
+
+def save_latest_heatmap(destination_path):
+    os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+    heatmaps = glob.glob("output/decoder_debug/cifhr-*.png")
+    if not heatmaps:
+        print("⚠️ No CIFHR heatmap found.")
+        return
+    latest = max(heatmaps, key=os.path.getctime)
+    shutil.copy(latest, destination_path)
+    print(f"✅ Heatmap saved to {destination_path}")
+
+# === MAIN ===
+image_path = 'temp/data/augmented/aug_frame_00088_jpg.rf.4b23ed41569aea13427f34c50d0996ec_90CCW.jpg'
+output_path = 'output/annotated_pose.png'
+
+# Ensure the output directory exists
+os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+# Load the image and run prediction
+image = PIL.Image.open(image_path).convert('RGB')
+predictions = run_pifpaf_prediction(image)
+
+# Annotate and save
+annotate_image(image, predictions, output_path)
+
+
+print(f"✅ Annotated pose saved to {output_path}")

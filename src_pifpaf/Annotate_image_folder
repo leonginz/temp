@@ -1,0 +1,118 @@
+"""Annotate swimmer images with custom confidence filtering.
+Compatible with **legacy OpenPifPaf** (no predictor.fields).
+
+Usage:
+    python Annotate_image_folder.py
+
+It will create:
+    temp/data/annotated_images/annotated_<name>.jpg  – pose overlay
+"""
+import os, numpy as np, openpifpaf, matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import PIL.Image
+import argparse
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+INPUT_FOLDER  = "temp/data/Test_data_02" 
+# INPUT_FOLDER  = "temp/data/Test_data"         # ← your swimmer frames
+OUTPUT_FOLDER = "temp/data/annotated_images"
+
+CONF_TH       = 0.05                             # keypoint vis threshold
+
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+
+# ---------------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------------
+
+def load_image(path):
+    """Return RGB numpy array."""
+    return np.asarray(PIL.Image.open(path).convert('RGB'))
+
+def run_pifpaf_prediction(img_np, checkpoint="resnet50"):
+    """
+    Predict key-points with thresholds identical to pifpaf_analysis:
+        seed 0.10 · instance 0.07 · keypoint 0.05
+        + force_complete_pose · dense_connections · soft-NMS
+    """
+    d = openpifpaf.decoder.CifCaf
+    d.seed_threshold          = 0.05       # start pose from weak joints
+    d.instance_threshold      = 0.03       # keep partial swimmer poses
+    d.keypoint_threshold      = 0.03       # keep uncertain joints
+    d.force_complete_pose     = True
+    d.orientation_invariant   = True
+    d.dense_connections       = True
+    d.apply_soft_nms          = True
+    d.decoder_workers         = 0          # Windows safety (legacy assert)
+
+    predictor = openpifpaf.Predictor(checkpoint=checkpoint)
+    return predictor.numpy_image(img_np)    # returns list[Annotation]
+
+
+# ------------------------------------------------------------------
+# 2) Drawing function – lower display threshold & (optionally) skeleton
+#    (replace your annotate_image / annotate_image_with_pifpaf helper)
+# ------------------------------------------------------------------
+COCO_SKELETON = [
+        (15, 13), (13, 11),             # Left leg
+        (16, 14), (14, 12),             # Right leg
+        (11, 12),                       # Hips
+        (5, 11), (6, 12),               # Torso sides
+        (5, 6),                         # Shoulders
+        (5, 7), (7, 9),                 # Left arm
+        (6, 8), (8, 10),                # Right arm
+        (0, 1), (0, 2),                 # Nose to eyes
+        (1, 3), (2, 4),                 # Eyes to ears
+        (0, 5), (0, 6)                  # Nose to shoulders
+    ]
+
+def annotate_image(img_rgb, annotations, out_path,
+                   confidence_threshold=0.03):
+    """Draw skeleton, key-points and confidence labels."""
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.imshow(img_rgb)
+
+    # skeleton lines first
+    for ann in annotations:
+        kps = ann.data
+        for j1, j2 in COCO_SKELETON:
+            if kps[j1,2] >= confidence_threshold \
+               and kps[j2,2] >= confidence_threshold:
+                ax.plot([kps[j1,0], kps[j2,0]],
+                        [kps[j1,1], kps[j2,1]],
+                        color='lime', linewidth=2, alpha=0.7)
+
+    # key-points + labels
+    for ann in annotations:
+        for i, (x, y, v) in enumerate(ann.data):
+            if v >= confidence_threshold:
+                ax.scatter(x, y, s=40, c='red')
+                ax.text(x + 3, y, f'{i}:{v:.2f}',
+                        fontsize=6, color='yellow')
+
+    ax.axis('off')
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    fig.savefig(out_path)
+    plt.close(fig)
+
+# ---------------------------------------------------------------------------
+# Batch loop
+# ---------------------------------------------------------------------------
+IMG_EXT = {'.jpg', '.jpeg', '.png'}
+for file_name in os.listdir(INPUT_FOLDER):
+    if os.path.splitext(file_name)[1].lower() not in IMG_EXT:
+        continue
+
+    src_path      = os.path.join(INPUT_FOLDER, file_name)
+    dst_pose_path = os.path.join(OUTPUT_FOLDER, f"annotated_{file_name}")
+
+    rgb = load_image(src_path)
+    preds = run_pifpaf_prediction(rgb)
+
+    annotate_image(rgb, preds[0], dst_pose_path)  # <-- FIXED HERE
+
+print("✅ All images processed.")

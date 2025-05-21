@@ -1,0 +1,10 @@
+train: /content/drive/MyDrive/data_r/images/train
+val: /content/drive/MyDrive/data_r/images/val
+test: /content/drive/MyDrive/data_r/images/test
+
+kpt_shape: [17, 3]
+flip_idx: [0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13, 16, 15]
+
+nc: 1
+names: ['person']
+

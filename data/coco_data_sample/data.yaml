@@ -1,0 +1,11 @@
+
+train: C:/Users/97254/PycharmProjects/pythonProject/datasets/coco_data_sample/images/train
+val: C:/Users/97254/PycharmProjects/pythonProject/datasets/coco_data_sample/images/val
+test: C:/Users/97254/PycharmProjects/pythonProject/datasets/coco_data_sample/images/test
+
+kpt_shape: [17, 3]
+flip_idx: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+
+nc: 1
+names: ['person']
+
